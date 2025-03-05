@@ -5,5 +5,8 @@ export const environment = {
   companyTitle: "Let's see our gifs for today! (DEV)",
 
   // Api Keys
+  giphyApiKey: 'tv0yJKAMKJoAaxvcBv8pBxDIwlBHWGQV',
+
   // URLS
+  giphyURL: 'https://api.giphy.com/v1/gifs',
 };
