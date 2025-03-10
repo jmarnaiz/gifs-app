@@ -7,6 +7,7 @@ import { GifMapper } from '../mapper/gif.mapper';
 import { map, Observable, tap } from 'rxjs';
 
 const HISTORY_KEY = 'history';
+const PAGE_SIZE = 20;
 
 const loadHistoryFromLocalStorage = (): Record<string, Gif[]> => {
   const history = localStorage.getItem(HISTORY_KEY);
@@ -19,27 +20,47 @@ const loadHistoryFromLocalStorage = (): Record<string, Gif[]> => {
 })
 export class GifService {
   private _http = inject(HttpClient);
+  private _trendingPage = signal(0);
 
   constructor() {
     this.loadTrendings();
   }
 
   trendingGifs = signal<Gif[]>([]);
+  trendingGifsIsLoading = signal(false);
+  // Debemos crear un array que contenga array de 3 gifs: [[gif1, gif2, gif3], [gif4, gif5, gif6], ...]
+  trendingGifsGrouped = computed<Gif[][]>(() => {
+    const groupedElements: Gif[][] = [];
+
+    for (let i = 0; i < this.trendingGifs().length; i += 3) {
+      groupedElements.push(this.trendingGifs().slice(i, i + 3));
+    }
+
+    return groupedElements;
+  });
+
   searchHistory = signal<Record<string, Gif[]>>(loadHistoryFromLocalStorage());
   searchHistoryKeys = computed(() => Object.keys(this.searchHistory()));
   // searchGifs = signal<Gif[]>([]);
 
   loadTrendings() {
+    if (this.trendingGifsIsLoading()) return;
+
+    this.trendingGifsIsLoading.set(true);
+
     this._http
       .get<GiphyResponse>(`${environment.giphyURL}/trending`, {
         params: {
           api_key: environment.giphyApiKey,
-          limit: 20,
+          offset: this._trendingPage() * PAGE_SIZE,
+          limit: PAGE_SIZE,
         },
       })
-      .subscribe((resp) => {
-        const gifs = GifMapper.mapGiphyItemsToGifArray(resp.data);
-        this.trendingGifs.set(gifs);
+      .pipe(map(({ data }) => GifMapper.mapGiphyItemsToGifArray(data)))
+      .subscribe((gifs) => {
+        this.trendingGifs.update((gifsStored) => [...gifsStored, ...gifs]);
+        this._trendingPage.update((page) => page + 1);
+        this.trendingGifsIsLoading.set(false);
       });
   }
 
@@ -78,18 +99,14 @@ export class GifService {
       );
   }
 
+  // Recuerda que si pongo llaves, hay que poner el return para saber que se devuelve
+
   getHistoryGifs(query: string): Gif[] {
     return this.searchHistory()[query] ?? [];
   }
-
-  // private _saveHistoryToLocalStorage() {
-  //   localStorage.setItem('history', JSON.stringify(this.searchHistory()));
-  // }
 
   // Se dispara cada vez que cambie el valor de searchHistory
   _saveHistoryToLocalStorage = effect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(this.searchHistory()));
   });
 }
-
-// Recuerda que si pongo llaves, hay que poner el return para saber que se devuelve
